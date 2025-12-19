@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>クイズ大会 得点管理</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f2f4f7;
+    padding: 20px;
+}
+h1 { text-align: center; }
+
+.box {
+    background: white;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+input {
+    padding: 6px;
+    font-size: 16px;
+    margin: 4px;
+}
+
+button {
+    font-size: 16px;
+    padding: 6px 10px;
+    margin: 2px;
+    cursor: pointer;
+}
+
+.team {
+    background: white;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rank { width: 35px; font-size: 22px; text-align: center; }
+.score { width: 50px; font-size: 22px; text-align: center; }
+
+.admin-only { display: none; }
+.delete { background:#ffd6d6; }
+</style>
+</head>
+<body>
+
+<h1>🏆 クイズ大会 得点表</h1>
+
+<div class="box">
+    <p id="status">接続中…</p>
+</div>
+
+<div class="box" id="loginBox" style="display:none;">
+    <input id="adminId" placeholder="管理者ID">
+    <input id="adminPw" type="password" placeholder="パスワード">
+    <button id="loginBtn">管理者ログイン</button>
+    <p id="loginMsg"></p>
+</div>
+
+<div id="teams"></div>
+
+<div class="box admin-only">
+    <button id="addBtn">＋ チーム追加</button>
+    <button id="resetBtn">🔄 リセット</button>
+</div>
+
+<script>
+/* ===== 設定（ここだけ変更） ===== */
+const WS_URL = "wss://quiz-d3rz.onrender.com/";
+/* =============================== */
+
+const statusEl = document.getElementById("status");
+const loginBox = document.getElementById("loginBox");
+const loginMsg = document.getElementById("loginMsg");
+const teamsDiv = document.getElementById("teams");
+
+const loginBtn = document.getElementById("loginBtn");
+const addBtn   = document.getElementById("addBtn");
+const resetBtn= document.getElementById("resetBtn");
+
+let ws;
+let isAdmin = false;
+let teams = [];
+
+/* ===== 接続 ===== */
+ws = new WebSocket(WS_URL);
+
+ws.onopen = () => {
+    statusEl.textContent = "接続成功";
+    loginBox.style.display = "block";
+};
+
+ws.onerror = () => {
+    statusEl.textContent = "接続失敗";
+};
+
+ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+
+    if (data.type === "update") {
+        teams = data.teams;
+        render();
+    }
+
+    if (data.type === "admin") {
+        if (data.success) {
+            isAdmin = true;
+            loginMsg.textContent = "管理者ログイン成功";
+            document.querySelectorAll(".admin-only")
+                .forEach(e => e.style.display = "block");
+            render();
+        } else {
+            loginMsg.textContent = "IDまたはパスワードが違います";
+        }
+    }
+};
+
+function send(obj) {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(obj));
+    }
+}
+
+/* ===== 管理者操作 ===== */
+loginBtn.onclick = () => {
+    send({
+        type: "login",
+        id: adminId.value,
+        password: adminPw.value
+    });
+};
+
+addBtn.onclick = () => send({ type: "addTeam" });
+resetBtn.onclick = () => send({ type: "reset" });
+
+function deleteTeam(i) {
+    if (confirm("削除しますか？")) {
+        send({ type: "deleteTeam", index: i });
+    }
+}
+
+/* ===== 表示 ===== */
+function render() {
+    teamsDiv.innerHTML = "";
+
+    const sorted = teams
+        .map((t,i)=>({...t,index:i}))
+        .sort((a,b)=>b.score - a.score);
+
+    sorted.forEach((t,r) => {
+        const medal = ["🥇","🥈","🥉"][r] || (r+1);
+        const div = document.createElement("div");
+        div.className = "team";
+        div.innerHTML = `
+            <div class="rank">${medal}</div>
+            <input value="${t.name}" ${!isAdmin?"disabled":""}
+                onchange="teams[${t.index}].name=this.value; send({type:'update',teams})">
+            <button ${!isAdmin?"disabled":""}
+                onclick="teams[${t.index}].score--; send({type:'update',teams})">−</button>
+            <div class="score">${t.score}</div>
+            <button ${!isAdmin?"disabled":""}
+                onclick="teams[${t.index}].score++; send({type:'update',teams})">＋</button>
+            ${isAdmin ? `<button class="delete" onclick="deleteTeam(${t.index})">🗑</button>` : ""}
+        `;
+        teamsDiv.appendChild(div);
+    });
+}
+</script>
+
+</body>
+</html>
