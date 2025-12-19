@@ -4,8 +4,8 @@ const PORT = process.env.PORT || 8080;
 
 // 管理者IDとパスワード（自由に変更OK）
 const ADMINS = {
-    nakanishi: "nakanishi1221",
-    1221525: "nakanishi"
+    nakanishi: "nkns1221",
+    0000: "2011122120110525"
 };
 
 let teams = [];
